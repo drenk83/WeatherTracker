@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/drenk83/WeatherTracker/internal/client/http/geocoding"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-co-op/gocron/v2"
@@ -18,11 +20,23 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
+	httpClient := &http.Client{
+		Timeout: time.Second * 10,
+	}
+	geocodingClient := geocoding.NewClinet(httpClient)
+
 	r.Get("/{city}", func(w http.ResponseWriter, r *http.Request) {
 		city := chi.URLParam(r, "city")
 		fmt.Println(city)
 
-		_, err := w.Write([]byte("welcome"))
+		res, err := geocodingClient.GetCoords(city)
+
+		raw, err := json.Marshal(res)
+		if err != nil {
+			log.Println(err)
+		}
+
+		_, err = w.Write(raw)
 		if err != nil {
 			log.Println(err)
 		}
