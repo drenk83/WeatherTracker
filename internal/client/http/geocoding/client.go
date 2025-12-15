@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 )
 
@@ -25,6 +26,8 @@ func NewClinet(httpClient *http.Client) *client {
 }
 
 func (c *client) GetCoords(city string) (Response, error) {
+	log.Println("Called method GetCoords with parameters: city:", city)
+
 	res, err := c.httpClient.Get(
 		fmt.Sprintf("https://geocoding-api.open-meteo.com/v1/search?name=%s&count=1&format=json&language=ru", city),
 	)
