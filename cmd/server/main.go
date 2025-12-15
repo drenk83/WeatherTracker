@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/drenk83/WeatherTracker/internal/client/http/geocoding"
+	openmeteo "github.com/drenk83/WeatherTracker/internal/client/http/open_meteo"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-co-op/gocron/v2"
@@ -23,15 +24,25 @@ func main() {
 	httpClient := &http.Client{
 		Timeout: time.Second * 10,
 	}
+
 	geocodingClient := geocoding.NewClinet(httpClient)
+	openMeteoClient := openmeteo.NewClinet(httpClient)
 
 	r.Get("/{city}", func(w http.ResponseWriter, r *http.Request) {
 		city := chi.URLParam(r, "city")
 		fmt.Println(city)
 
-		res, err := geocodingClient.GetCoords(city)
+		geoRes, err := geocodingClient.GetCoords(city)
+		if err != nil {
+			log.Println(err)
+		}
 
-		raw, err := json.Marshal(res)
+		openRes, err := openMeteoClient.GetTemperature(geoRes.Latitude, geoRes.Longitude)
+		if err != nil {
+			log.Println(err)
+		}
+
+		raw, err := json.Marshal(openRes)
 		if err != nil {
 			log.Println(err)
 		}
