@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -13,36 +14,48 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-co-op/gocron/v2"
+	"github.com/jackc/pgx/v5"
 )
 
-const httpPort = ":3000"
+const (
+	httpPort = ":3001"
+	city     = "moscow"
+)
+
+type Reading struct {
+	Name        string    `db:"name"`
+	Timestamp   time.Time `db:"timestamp"`
+	Temperature float64   `db:"temperature"`
+}
 
 func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
-	httpClient := &http.Client{
-		Timeout: time.Second * 10,
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, "postgresql://drenk83:password@localhost:54321/weather")
+	if err != nil {
+		panic(err)
 	}
-
-	geocodingClient := geocoding.NewClinet(httpClient)
-	openMeteoClient := openmeteo.NewClinet(httpClient)
+	defer conn.Close(ctx)
 
 	r.Get("/{city}", func(w http.ResponseWriter, r *http.Request) {
-		city := chi.URLParam(r, "city")
-		fmt.Println(city)
+		cityName := chi.URLParam(r, "city")
+		fmt.Println(cityName)
 
-		geoRes, err := geocodingClient.GetCoords(city)
+		var readings Reading
+		err = conn.QueryRow(
+			ctx,
+			"SELECT name, timestamp, temperature FROM reading WHERE name = $1 ORDER BY timestamp desc limit 1",
+			city,
+		).Scan(&readings.Name, &readings.Timestamp, &readings.Temperature)
+
 		if err != nil {
-			log.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("internal error"))
 		}
 
-		openRes, err := openMeteoClient.GetTemperature(geoRes.Latitude, geoRes.Longitude)
-		if err != nil {
-			log.Println(err)
-		}
-
-		raw, err := json.Marshal(openRes)
+		raw, err := json.Marshal(readings)
 		if err != nil {
 			log.Println(err)
 		}
@@ -59,7 +72,7 @@ func main() {
 		panic(err)
 	}
 
-	jobs, err := initJobs(s)
+	jobs, err := initJobs(ctx, s, conn)
 	if err != nil {
 		panic(err)
 	}
@@ -92,7 +105,14 @@ func main() {
 	}
 }
 
-func initJobs(s gocron.Scheduler) (gocron.Job, error) {
+func initJobs(ctx context.Context, s gocron.Scheduler, conn *pgx.Conn) (gocron.Job, error) {
+	httpClient := &http.Client{
+		Timeout: time.Second * 10,
+	}
+
+	geocodingClient := geocoding.NewClinet(httpClient)
+	openMeteoClient := openmeteo.NewClinet(httpClient)
+
 	// add a job to the scheduler
 	j, err := s.NewJob(
 		gocron.DurationJob(
@@ -100,7 +120,33 @@ func initJobs(s gocron.Scheduler) (gocron.Job, error) {
 		),
 		gocron.NewTask(
 			func() {
-				fmt.Println("test")
+				geoRes, err := geocodingClient.GetCoords(city)
+				if err != nil {
+					log.Println(err)
+				}
+				openRes, err := openMeteoClient.GetTemperature(geoRes.Latitude, geoRes.Longitude)
+				if err != nil {
+					log.Println(err)
+				}
+
+				timestamp, err := time.Parse("2006-01-02T15:04", openRes.Current.Time)
+				if err != nil {
+					log.Println(err)
+					return
+				}
+
+				_, err = conn.Exec(
+					ctx,
+					"INSERT INTO reading (name, timestamp, temperature) VALUES ($1, $2, $3)",
+					city,                          // $1 - name
+					timestamp,                     // $2 - timestamp
+					openRes.Current.Temperature2m, // $3 - temperature
+				)
+				if err != nil {
+					log.Println("Failed to insert reading for", city)
+				}
+
+				log.Println("Update data for city:", city, "time:", timestamp, "temperature", openRes.Current.Temperature2m)
 			},
 		),
 	)
