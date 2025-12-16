@@ -8,3 +8,8 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_USER: drenk83
       POSTGRES_DB: weather
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
