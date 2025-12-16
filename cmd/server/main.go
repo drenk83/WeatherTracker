@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -51,8 +52,15 @@ func main() {
 		).Scan(&readings.Name, &readings.Timestamp, &readings.Temperature)
 
 		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte("not found"))
+				return
+			}
+
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("internal error"))
+			return
 		}
 
 		raw, err := json.Marshal(readings)
@@ -116,7 +124,7 @@ func initJobs(ctx context.Context, s gocron.Scheduler, conn *pgx.Conn) (gocron.J
 	// add a job to the scheduler
 	j, err := s.NewJob(
 		gocron.DurationJob(
-			10*time.Second,
+			60*time.Second,
 		),
 		gocron.NewTask(
 			func() {

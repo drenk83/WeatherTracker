@@ -1,4 +1,3 @@
-1. http эндпоинт, который присылает в path параметре имя города, и возвращает текущую температуру 
-2. Реализовать cron, который будет ходтьб в сторонние API 
-3. Подключить postgresql и сохранять туда данные о погоде
-4. Вынест параметры в конфиг
+код не очень, согл
+подключение к таблице через psql: psql -h localhost -p 54321 -U drenk83 -d weather
+создание таблицы: create table reading (name text not null, time timestamp not null, temperature float8 not null); 

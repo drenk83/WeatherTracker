@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: drenk83
       POSTGRES_DB: weather
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
 
 volumes:
   postgres_data:
